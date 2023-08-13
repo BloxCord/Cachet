@@ -11,7 +11,7 @@
 
 namespace CachetHQ\Cachet\Http\Controllers;
 
-use AltThree\Badger\Facades\Badger;
+use CachetHQ\Badger\Facades\Badger;
 use CachetHQ\Cachet\Http\Controllers\Api\AbstractApiController;
 use CachetHQ\Cachet\Models\Component;
 use CachetHQ\Cachet\Models\Incident;
@@ -74,7 +74,7 @@ class StatusPageController extends AbstractApiController
                                       ->values();
 
             $numIncidentDays = count($allIncidentDays);
-            $numPages = round($numIncidentDays / $appIncidentDays);
+            $numPages = round($numIncidentDays / max($appIncidentDays, 1));
 
             $selectedDays = $allIncidentDays->slice($page * $appIncidentDays, $appIncidentDays)->all();
 
@@ -96,12 +96,13 @@ class StatusPageController extends AbstractApiController
             $nextDate = $startDate->copy()->addDays($appIncidentDays)->toDateString();
         }
 
-        $allIncidents = Incident::where('visible', '>=', (int) !Auth::check())->whereBetween('occurred_at', [
-            $endDate->format('Y-m-d').' 00:00:00',
-            $startDate->format('Y-m-d').' 23:59:59',
-        ])->orderBy('occurred_at', 'desc')->get()->groupBy(function (Incident $incident) {
-            return app(DateFactory::class)->make($incident->occurred_at)->toDateString();
-        });
+        $allIncidents = Incident::with('component', 'updates.incident')
+            ->where('visible', '>=', (int) !Auth::check())->whereBetween('occurred_at', [
+                $endDate->format('Y-m-d').' 00:00:00',
+                $startDate->format('Y-m-d').' 23:59:59',
+            ])->orderBy('occurred_at', 'desc')->get()->groupBy(function (Incident $incident) {
+                return app(DateFactory::class)->make($incident->occurred_at)->toDateString();
+            });
 
         if (!$onlyDisruptedDays) {
             $incidentDays = array_pad([], $appIncidentDays, null);
@@ -167,10 +168,14 @@ class StatusPageController extends AbstractApiController
         $metrics = app(MetricRepository::class);
 
         switch ($type) {
-            case 'last_hour': $metricData = $metrics->listPointsLastHour($metric); break;
-            case 'today': $metricData = $metrics->listPointsToday($metric); break;
-            case 'week': $metricData = $metrics->listPointsForWeek($metric); break;
-            case 'month': $metricData = $metrics->listPointsForMonth($metric); break;
+            case 'last_hour': $metricData = $metrics->listPointsLastHour($metric);
+                break;
+            case 'today': $metricData = $metrics->listPointsToday($metric);
+                break;
+            case 'week': $metricData = $metrics->listPointsForWeek($metric);
+                break;
+            case 'month': $metricData = $metrics->listPointsForMonth($metric);
+                break;
             default: $metricData = [];
         }
 
@@ -192,10 +197,14 @@ class StatusPageController extends AbstractApiController
         $component = AutoPresenter::decorate($component);
 
         switch ($component->status_color) {
-            case 'reds': $color = Config::get('setting.style_reds', '#FF6F6F'); break;
-            case 'blues': $color = Config::get('setting.style_blues', '#3498DB'); break;
-            case 'greens': $color = Config::get('setting.style_greens', '#7ED321'); break;
-            case 'yellows': $color = Config::get('setting.style_yellows', '#F7CA18'); break;
+            case 'reds': $color = Config::get('setting.style_reds', '#FF6F6F');
+                break;
+            case 'blues': $color = Config::get('setting.style_blues', '#3498DB');
+                break;
+            case 'greens': $color = Config::get('setting.style_greens', '#7ED321');
+                break;
+            case 'yellows': $color = Config::get('setting.style_yellows', '#F7CA18');
+                break;
             default: $color = null;
         }
 
